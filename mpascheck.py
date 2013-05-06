@@ -27,7 +27,7 @@ deberá comprobar:
        a = 3;              // Error. 'a' no está definido.
        var a int;
 
-    Nota: los nombres de tipo como "int", "float" y "string" son nombres incorporados que
+    Note: los nombres de tipo como "int", "float" y "string" son nombres incorporados que
     deben ser definidos al comienzo de un programa (función).
     
 2.  Tipos de constantes
@@ -47,12 +47,12 @@ deberá comprobar:
     Operaciones binarias solamente operan sobre operandos del mismo tipo y produce un
     resultado del mismo tipo.  De lo contrario, se tiene un error de tipo.  Por ejemplo:
 
-		var a int = 2;
-		var b float = 3.14;
+    var a int = 2;
+    var b float = 3.14;
 
-		var c int = a + 3;    // OK
-		var d int = a + b;    // Error.  int + float
-		var e int = b + 4.5;  // Error.  int = float
+    var c int = a + 3;    // OK
+    var d int = a + b;    // Error.  int + float
+    var e int = b + 4.5;  // Error.  int = float
 
 4.  Chequeo de tipo operador unario.
 
@@ -69,8 +69,8 @@ deberá comprobar:
     Los intentos de usar operadores no soportados debería dar lugar a un error.
     Por ejemplo:
 
-		var string a = "Hello" + "World";     // OK
-		var string b = "Hello" * "World";     // Error (op * no soportado)
+    var string a = "Hello" + "World";     // OK
+    var string b = "Hello" * "World";     // Error (op no soportado *)
 
 6.  Asignación.
 
@@ -90,315 +90,267 @@ from mpasast import *
 import mpastype
 import mpaslex
 
-scope = []
-current = None
-
 class SymbolTable(object):
-	'''
-	Clase que representa una tabla de símbolos.  Debe proporcionar funcionabilidad
-	para agregar y buscar nodos asociados con identificadores.
-	'''
-	
-	class SymbolDefinedError(Exception):
-		'''
-		Exception disparada cuando el codigo trara de agregar un simbolo 
-		a la tabla de simbolos, y este ya esta definido
-		'''
-		pass
-	
-	class SymbolConflictError(Exception):
-		'''
-		'''
-		pass
-	
-	def __init__(self, parent=None):
-		'''
-		Crea una tabla de simbolos vacia con la tabla padre dada
-		'''
-		self.symtab = {}
-		self.parent = parent
-		if self.parent != None:
-			self.parent.children.append(self)
-		self.children = []
-		
-	def add(self, a, v):
-		'''
-		Agrega un simbol con el valor dado a la tabla de simbolos
-		
-		func foo(x:int, y:int)
-		x:float;
-		
-		'''
-		if self.symtab.has_key(a):
-			if self.symtab[a].type.get_string() != v.type.get_string():
-				raise SymbolTable.SymbolConflictError()
-			else:
-				raise SymbolTable.SymbolDefinedError()
-		self.symtab[a] = v
+  '''
+  Clase que representa una tabla de símbolos.  Debe proporcionar funcionabilidad
+  para agregar y buscar nodos asociados con identificadores.
+  '''
+  def __init__(self, parent=None):
+    '''
+    Crea una tabla se símbol vacia con la tabla de símbol
+    padre.
+    '''
 
-	def lookup(self, a):
-		if self.symtab.has_key(a):
-			return self.symtab[a]
-		else:
-			if self.parent != None:
-				return self.parent.lookup(a)
-			else:
-				return None
+    self.entries = {}
+    self.parent = parent
+    if self.parent != None:
+      self.parent.children.append(self)
+    self.children = []
+  def lookup(self, a):
+    return self.entries.get(a)
 
-	def get(self, a):
-		if self.symtab.has_key(a): 
-			return self.symtab[a]
-		else:
-			if self.parent != None:
-				return self.parent.get(a)
-			else:
-				return None
+  def add(self, name, value):
+    '''
+    Agrega un símbol con el valor dado a la tabla de símbol.
+    El valor es usualmente un nodo del AST que representa la
+    declaración o definición de una función/variable (p.e.,
+    Declaration o FunctionDefn).
+    '''
+    
+    if self.entries.has_key(name):
+      if not self.entries[name].extern:
+        raise Symtab.SymbolDefinedError()
+      elif self.entries[name].type.get_string() != \
+        value.type.get_string():
+        raise Symtab.SymbolConflictError()
+    self.entries[name] = value
 
-	def new_scope():
-		global current
-		current = SymbolTable()
-		_scope.append(current)
-		return current
+  def get(self, name):
+    '''
+    Recupera el símbol con el nombre dado desde la tabla de
+    símbolos, recursivamente hacia arriba a través del padre
+    si no se encuentra en la actual.
+    '''
 
-	def pop_scope():
-		global current
-		r = _scope.pop()
-		current = _scope[-1]
-		return r
+    if self.entries.has_key(name):
+      return self.entries[name]
+    else:
+      if self.parent != None:
+        return self.parent.get(name)
+      else:
+        return None
 
-	def get_symbol(none, level = 0, altr=None):
-		for i in range(len(_scope)-(level+1),-1,-1):
-			s = _scope[i]
-			try:
-				sym = s.lookup(name)
-				if altr:
-					if has.altr(sym, altr): return sym
-				else:
-					return sym
-			except KeyError:
-				pass
-			return None
+
+
 
 class CheckProgramVisitor(NodeVisitor):
-	'''
-	Clase de Revisión de programa.  Esta clase usa el patrón cisitor como está
-	descrito en mpasast.py.  Es necesario definir métodos de la forma visit_NodeName()
-	para cada tipo de nodo del AST que se desee procesar.
+  '''
+  Clase de Revisión de programa.  Esta clase usa el patrón cisitor como está
+  descrito en mpasast.py.  Es necesario definir métodos de la forma visit_NodeName()
+  para cada tipo de nodo del AST que se desee procesar.
 
-	Nota: Usted tendrá que ajustar los nombres de los nodos del AST si ha elegido
-	nombres diferentes.
-	'''
-	def __init__(self):
-		# Inicializa la tabla de simbolos
-		pass
-		
-	def push_symtab(self, node):
-		self.current = SymbolTable(self.current)
-		node.symtab = self.current
-		
-	def pop_symbol(self):
-		self.current = self.current.parent
+  Nota: Usted tendrá que ajustar los nombres de los nodos del AST si ha elegido
+  nombres diferentes.
+  '''
+  def __init__(self):
+    # Inicializa la tabla de simbolos
+    self.symtab = SymbolTable()
 
-	def visit_Program(self,node):
-	
-		self.push_symtab(node)
-		# Agrega nombre de tipos incorporados ((int, float, string) a la tabla de simbolos
-		node.symtab.add("int",mpastype.int_type)
-		node.symtab.add("float",mpastype.float_type)
-		node.symtab.add("string",mpastype.string_type)
-		node.symtab.add("bool",mpastype.boolean_type)
+    # Agrega nombre de tipos incorporados ((int, float, string) a la tabla de simbolos
+    self.symtab.add("int",mpastype.int_type)
+    self.symtab.add("float",mpastype.float_type)
+    self.symtab.add("string",mpastype.string_type)
+    self.symtab.add("bool",mpastype.boolean_type)
 
-		# 1. Visita todas las declaraciones (statements)
-		# 2. Registra la tabla de simbolos asociada
-		self.visit(node.program)
+  def visit_Program(self,node):
+    # 1. Visita todas las declaraciones (statements)
+    # 2. Registra la tabla de simbolos asociada
+    for i in node.function:
+      self.visit(i)
+
+  def visit_IfStatement(self, node):
+    self.visit(node.cond)
+    if not node.cond.type == mpastype.boolean_type:
+      error(node.lineno, "Tipo incorrecto para condición if")
+    else:
+      self.visit(node.then_b)
+      if node.else_b:
+        self.visit(node.else_b)
+
+  def visit_WhileStatement(self, node):
+    self.visit(node.cond)
+    if not node.cond.type == mpastype.boolean_type:
+      error(node.lineno, "Tipo incorrecto para condición while")
+    else:
+      self.visit(node.body)
+
+  def visit_UnaryOp(self, node):
+    # 1. Asegúrese que la operación es compatible con el tipo
+    # 2. Ajuste el tipo resultante al mismo del operando
+    self.visit(node.right)
+    if not mpaslex.operators[node.op] in node.right.type.un_ops:
+      error(node.lineno, "Operación no soportada con este tipo")
+    node.type = node.right.type
+
+  def visit_BinaryOp(self, node):
+    # 1. Asegúrese que los operandos left y right tienen el mismo tipo
+    # 2. Asegúrese que la operación está soportada
+    # 3. Asigne el tipo resultante
+    self.visit(node.left)
+    self.visit(node.right)
+    if node.left.type != node.right.type:
+      error(node.lineno, "No coinciden los tipos de los operandos en la operacion con %s" % node.op)
+    node.type = node.left.type
+
+  def visit_AssignmentStatement(self,node):
+    # 1. Asegúrese que la localización de la asignación está definida
+    sym = self.symtab.lookup(node.location)
+    assert sym, "Asignado a un sym desconocido"
+    # 2. Revise que la asignación es permitida, pe. sym no es una constante
+    # 3. Revise que los tipos coincidan.
+    self.visit(node.value)
+    assert sym.type == node.value.type, "Tipos no coinciden en asignación"
+
+  def visit_ConstDeclaration(self,node):
+    # 1. Revise que el nombre de la constante no se ha definido
+    if self.symtab.lookup(node.id):
+      error(node.lineno, "Símbol %s ya definido" % node.id)
+    # 2. Agrege una entrada a la tabla de símbolos
+    else:
+      self.symtab.add(node.id, node)
+    self.visit(node.value)
+    node.type = node.value.type
+
+  def visit_VarDeclaration(self,node):
+    # 1. Revise que el nombre de la variable no se ha definido
+    if self.symtab.lookup(node.id):
+      error(node.lineno, "Símbol %s ya definido" % node.id)
+    # 2. Agrege la entrada a la tabla de símbolos
+    else:
+      self.symtab.add(node.id, node)
+    # 2. Revise que el tipo de la expresión (si lo hay) es el mismo
+    if node.value:
+      self.visit(node.value)
+      assert(node.typename == node.value.type.name)
+    # 4. Si no hay expresión, establecer un valor inicial para el valor
+    else:
+      node.value = None
+    node.type = self.symtab.lookup(node.typename)
+    assert(node.type)
+
+  def visit_Location(self,node):
+    # 1. Revisar que la localización es una variable válida o un valor constante
+    # 2. Asigne el tipo de la localización al nodo
+    if node.pos:
+    	self.visit(node.pos)
+    	if node.pos.type != self.symtab.lookup("int") : 
+    		error(node.lineno, "Acceso invalido al vector")
+    if self.symtab.lookup(node.id):
+    	node.type = self.symtab.lookup(node.id)
+    else:
+    	error(node.lineno, "El id %s no ha sido definido" % node.id)
+
+  def visit_Literal(self,node):
+    # Adjunte un tipo apropiado a la constante
+    if isinstance(node.value, types.BooleanType):
+      node.type = self.symtab.lookup("bool")
+    elif isinstance(node.value, types.IntType):
+      node.type = self.symtab.lookup("int")
+    elif isinstance(node.value, types.FloatType):
+      node.type = self.symtab.lookup("float")
+    elif isinstance(node.value, types.StringTypes):
+      node.type = self.symtab.lookup("string")
+
+  def visit_Funcdecl(self, node):
+    if self.symtab.lookup(node.id):
+      error(node.lineno, "Símbol %s ya definido" % node.id)
+    self.visit(node.parameters)
+    self.visit(node.locals)
+    self.visit(node.statements)
+
+  def visit_Parameters(self, node):
+    for p in node.parameters:
+      self.visit(p)
+#falta
+  def visit_Parameters_Declaration(self, node):
+    node.type = self.symtab.lookup(node.typename)
+
+  def visit_Group(self, node):
+    self.visit(node.expression)
+    node.type = node.expression.type
+
+  def visit_RelationalOp(self, node):
+    self.visit(node.left)
+    self.visit(node.right)
+    if not node.left.type == node.right.type:
+      error(node.lineno, "Operandos de relación no son del mismo tipo")
+    elif not mpaslex.operators[node.op] in node.left.type.bin_ops:
+      error(node.lineno, "Operación no soportada con este tipo")
+    node.type = self.symtab.lookup('bool')
+
+  def visit_FunCall(self, node):
+    pass
+  def visit_ExprList(self, node):
+    pass
+
+  def visit_Empty(self, node):
+    pass
+
+  def push_symtab(self, node):
+    '''
+    Inserta una tabla de símbolos dentro de la pila de tablas de
+    símbolos del visitor y adjunta esta tabla de símbolos al nodo
+    dado.  Se utiliza siempre que un ámbito léxico es encontrado,
+    por lo que el nodo es un objeto CompoundStatement.
+    '''
+
+    self.curr_symtab = Symtab(self.curr_symtab)
+    node.symtab = self.curr_symtab
+
+  def pop_symtab(self):
+    '''
+    Extrae una tabla de símbolos de la pila de tablas de símbol
+    del visitor.  Se utiliza cuando se sale de un ámbito léxico.
+    '''
+
+    self.curr_symtab = self.curr_symtab.parent
+
+  def generic_visit(self,node):
+    if getattr(node,"_fields") : 
+      for field in getattr(node,"_fields"):
+        value = getattr(node,field,None)
+        if isinstance(value, list):
+          for item in value:
+            if isinstance(item,AST):
+              self.visit(item)
+        elif isinstance(value, AST):
+          self.visit(value)
+    else :
+      pass
 
 
-
-	def visit_IfStatement(self, node):
-		self.visit(node.condition)
-		if not node.condition.type == mpastype.boolean_type:
-			error(node.lineno, "Tipo incorrecto para condición if")
-		else:
-			self.visit(node.then_b)
-			if node.else_b:
-				self.visit(node.else_b)
-
-	def visit_WhileStatement(self, node):
-		self.visit(node.condition)
-		if not node.condition.type == mpastype.boolean_type:
-			error(node.lineno, "Tipo incorrecto para condición while")
-		else:
-			self.visit(node.body)
-
-	def visit_UnaryOp(self, node):
-		# 1. Asegúrese que la operación es compatible con el tipo
-		# 2. Ajuste el tipo resultante al mismo del operando
-		self.visit(node.left)
-		if not mpaslex.operators[node.op] in node.left.type.un_ops:
-			error(node.lineno, "Operación no soportada con este tipo")
-		self.type = node.left.type
-
-	def visit_BinaryOp(self, node):
-		# 1. Asegúrese que los operandos left y right tienen el mismo tipo
-		# 2. Asegúrese que la operación está soportada
-		# 3. Asigne el tipo resultante
-		self.visit(node.left)
-		self.visit(node.right)
-		node.type = node.left.type
-
-	def visit_AssignmentStatement(self,node):
-		# 1. Asegúrese que la localización de la asignación está definida
-		sym = self.symtab.lookup(node.location)
-		assert sym, "Asignado a un sym desconocido"
-		# 2. Revise que la asignación es permitida, pe. sym no es una constante
-		# 3. Revise que los tipos coincidan.
-		self.visit(node.value)
-		assert sym.type == node.value.type, "Tipos no coinciden en asignación"
-
-	def visit_ConstDeclaration(self,node):
-		# 1. Revise que el nombre de la constante no se ha definido
-		if self.symtab.lookup(node.id):
-			error(node.lineno, "Símbol %s ya definido" % node.id)
-		# 2. Agrege una entrada a la tabla de símbolos
-		else:
-			self.symtab.add(node.id, node)
-		self.visit(node.value)
-		node.type = node.value.type
-
-	def visit_VarDeclaration(self,node):
-		# 1. Revise que el nombre de la variable no se ha definido
-		if self.symtab.lookup(node.id):
-			error(node.lineno, "Símbol %s ya definido" % node.id)
-		# 2. Agrege la entrada a la tabla de símbolos
-		else:
-			self.symtab.add(node.id, node)
-		# 2. Revise que el tipo de la expresión (si lo hay) es el mismo
-		if node.value:
-			self.visit(node.value)
-			assert(node.typename == node.value.type.name)
-		# 4. Si no hay expresión, establecer un valor inicial para el valor
-		else:
-			node.value = None
-		node.type = self.symtab.lookup(node.typename)
-		assert(node.type)
-
-	def visit_Typename(self,node):
-		sym = self.symtab.lookup(node.name)
-		if not isinstance(sym, MpasType):
-			error(node.lineno, "%s no es un tipo valido" % node.id)
-			return
-		node.type = sym.type
-
-	def visit_Location(self,node):
-		 # 1. Make sure the location is a valid variable or constant value
-		sym = self.symtab.lookup(node.name)
-		if not sym:
-			error(node.lineno, "nombre '%s' no fue encontrado" % node.id)
-        # 2. Assign the type of the location to the node
-		node.type = sym.type
-
-
-	def visit_LoadLocation(self,node):
-		# 1. Revisar que loa localización cargada es válida.
-		# 2. Asignar el tipo apropiado
-		sym = self.symtab.lookup(node.name)
-		assert(sym)
-		node.type = sym.type
-
-	def visit_Literal(self,node):
-		# Adjunte un tipo apropiado a la constante
-		if isinstance(node.value, types.BooleanType):
-			node.type = self.symtab.lookup("bool")
-		elif isinstance(node.value, types.IntType):
-			node.type = self.symtab.lookup("int")
-		elif isinstance(node.value, types.FloatType):
-			node.type = self.symtab.lookup("float")
-		elif isinstance(node.value, types.StringTypes):
-			node.type = self.symtab.lookup("string")
-
-	def visit_PrintStatement(self, node):
-		self.visit(node.expr)
-
-	def visit_Extern(self, node):
-		# obtener el tipo retornado
-		# registe el nombre de la función
-		self.visit(node.func_prototype)
-
-	def visit_FuncPrototype(self, node):
-		print 'foooooo'
-		if self.symtab.lookup(node.id):
-			error(node.lineno, "Símbol %s ya definido" % node.id)
-		self.visit(node.params)
-		node.type = self.symtab.lookup(node.typename)
-
-	def visit_Parameters(self, node):
-		for p in node.param_decls:
-			self.visit(p)
-
-	def visit_ParamDecl(self, node):
-		node.type = self.symtab.lookup(node.typename)
-
-	def visit_Group(self, node):
-		self.visit(node.expression)
-		node.type = node.expression.type
-
-	def visit_RelationalOp(self, node):
-		self.visit(node.left)
-		self.visit(node.right)
-		if not node.left.type == node.right.type:
-			error(node.lineno, "Operandos de relación no son del mismo tipo")
-		elif not mpaslex.operators[node.op] in node.left.type.bin_ops:
-			error(node.lineno, "Operación no soportada con este tipo")
-		node.type = self.symtab.lookup('bool')
-
-	def visit_FunCall(self, node):
-		sym = self.symtab.lookup(node.name)
-		if not sym:
-		    #self.symtab.n_print()
-		    error(node.lineno, "Function name '{}' not found".format(node.name))
-		    return
-		if not isinstance(sym, Funcdecl):
-		    error(node.lineno, "Tried to call non-function '{}'".format(node.name))
-		    return
-		if len(sym.parameters) != len(node.arguments):
-		    error(node.lineno, "Number of arguments for call to function '{}' do not match function parameter declaration on line {}".format(node.name, sym.lineno))
-		self.visit(node.arguments)
-		argerrors = False
-		for arg, parm in zip(node.arguments.arguments, sym.parameters.parameters):
-		    if arg.type != parm.type:
-				error(node.lineno, "Argument type '{}' does not match parameter type '{}' in function call to '{}'".format(arg.type.typename, parm.type.typename, node.name))
-				argerrors = True
-		    if argerrors:
-				return
-		    arg.parm = parm 
-		
-
-	def visit_ExprList(self, node):
-		pass
-	def visit_Empty(self, node):
-		pass
 
 # ----------------------------------------------------------------------
 #                       NO MODIFICAR NADA DE LO DE ABAJO
 # ----------------------------------------------------------------------
 
 def check_program(node):
-	'''
-	Comprueba el programa suministrado (en forma de un AST)
-	'''
-	checker = CheckProgramVisitor()
-	checker.visit(node)
+  '''
+  Comprueba el programa suministrado (en forma de un AST)
+  '''
+  checker = CheckProgramVisitor()
+  checker.visit(node)
 
 def main():
-	import mpasparse
-	import sys
-	from errors import subscribe_errors
-	lexer = mpaslex.make_lexer()
-	parser = mpasparse.make_parser()
-	with subscribe_errors(lambda msg: sys.stdout.write(msg+"\n")):
-		program = parser.parse(open(sys.argv[1]).read())
-		# Revisa el programa
-		check_program(program)
+  import mpasparse
+  import sys
+  from errors import subscribe_errors
+  lexer = mpaslex.make_lexer()
+  parser = mpasparse.make_parser()
+  with subscribe_errors(lambda msg: sys.stdout.write(msg+"\n")):
+    program = parser.parse(open(sys.argv[1]).read())
+    # Revisa el programa
+    check_program(program)
 
 if __name__ == '__main__':
-	main()
+  main()

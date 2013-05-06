@@ -23,7 +23,7 @@ def p_program(p):
         p[0] = p[1]
     else:
         p[0] = Program([p[1]])
-
+    p[0].lineno = lexer.lineno    
 #vuelve st para los BEGIN  y END en los while, if y else
 
 def p_st(p):
@@ -31,6 +31,7 @@ def p_st(p):
     statement : BEGIN statements END
     '''
     p[0] = p[2]
+    p[0].lineno = lexer.lineno
 
 #def p_st_1(p):
 #    '''
@@ -43,6 +44,7 @@ def p_statements(p):
     statements : statement
     '''
     p[0] = Statements([p[1]])
+    p[0].lineno = lexer.lineno
 
 # se quito st, entrando en la regla statements 
 
@@ -53,6 +55,18 @@ def p_statements_1(p):
     '''
     p[1].append(p[3])
     p[0] = p[1]
+    p[0].lineno = lexer.lineno
+
+def p_statementsError(p):
+    '''
+    statements : statements statement
+
+    '''   
+    sys.stderr.write("Error en %d: Mala definicion de declaracion. Falta de ';' \n" % (lexer.lineno-1))
+    p[1].append(p[2])
+    p[0]=p[1] 
+    p[0].lineno = lexer.lineno
+
 
 def p_statement(p):
     '''
@@ -74,6 +88,7 @@ def p_statement(p):
         p[0] = Break()
     else:
         p[0] = p[1]
+    p[0].lineno = lexer.lineno
 
 #def p_const_declaration(p):
 #    '''
@@ -87,44 +102,68 @@ def p_locals(p):
     '''
     p[1].append(p[2])
     p[0] = p[1]
+    p[0].lineno = lexer.lineno
 
 def p_locals_1(p):
     '''
     locals : local
     '''
     p[0] = Locals([p[1]])
+    p[0].lineno = lexer.lineno
 
 def p_local(p):
     '''
     local : ID COLON TYPENAME SEMI
     '''
     p[0] = Local(p[1], p[3],None)
+    p[0].lineno = lexer.lineno
+
 
 def p_local_1(p):
     '''
     local : ID COLON TYPENAME LBRACKET literal RBRACKET SEMI
     '''
     p[0] = Local(p[1], p[3], p[5])
+    p[0].lineno = lexer.lineno
+
 
 def p_local_2(p):
     '''
     local : function SEMI
     '''
     p[0] = p[1]
+    p[0].lineno = lexer.lineno
+
+
+def p_localError(p):
+    '''
+    local : ID COLON TYPENAME 
+            | function 
+            | ID COLON TYPENAME LBRACKET literal RBRACKET         
+    '''
+    sys.stderr.write("Error en %d: Mala definicion de local. Falta de ';' \n" % (lexer.lineno-1))
+
 
 def p_fundecl(p):
     '''
     function : FUNC ID LPAREN parameters RPAREN locals BEGIN statements END
     '''
-    p[0] = Funcdecl(p[2], p[4], p[6], p[8]) 
+    p[0] = Funcdecl(p[2], p[4], p[6], p[8])
+    p[0].lineno = lexer.lineno 
+
 
 #nueva, no cambia el arbol
+def p_FunctionError1(p):
+    'function : FUNC ID LPAREN parameters RPAREN BEGIN statements END SEMI' 
+    sys.stderr.write("Error en %d: Mala definicion de declaracion. Sobra un ';' \n" % (lexer.lineno-1))
 
 def p_fundecl_1(p):
     '''
     function : FUNC ID LPAREN parameters RPAREN BEGIN statements END
     '''
     p[0] = Funcdecl(p[2], p[4], None, p[7]) 
+    p[0].lineno = lexer.lineno
+
 
 def p_parameters(p):
     '''
@@ -132,6 +171,7 @@ def p_parameters(p):
     '''
     p[1].append(p[3])
     p[0] = p[1]
+    p[0].lineno = lexer.lineno
 
 def p_parameters_1(p):
     '''
@@ -139,66 +179,90 @@ def p_parameters_1(p):
                | empty
     '''
     p[0] = Parameters([p[1]])
+    p[0].lineno = lexer.lineno
 
 def p_parm_declaration(p):
     '''
     parm_declaration : ID COLON TYPENAME
     '''
     p[0] = Parameters_Declaration(p[1], p[3],None)
+    p[0].lineno = lexer.lineno
 
 def p_parm_declaration_1(p):
     '''
     parm_declaration : ID COLON TYPENAME LBRACKET literal RBRACKET
     '''
     p[0] = Parameters_Declaration(p[1], p[3], p[5])
+    p[0].lineno = lexer.lineno
 
 def p_if(p):
     '''
     if : IF cond THEN statement %prec ELSE
     '''
     p[0] = IfStatement(p[2], p[4], None)
+    p[0].lineno = lexer.lineno
 
 def p_if_else(p):
     '''
     if_else :  IF cond THEN statement ELSE statement
     '''
     p[0] = IfStatement(p[2], p[4], p[6])
+    p[0].lineno = lexer.lineno
+
+def p_ifError(p):
+    '''
+    if : IF cond statement %prec ELSE
+    '''
+    sys.stderr.write("Error en %d: Falta sentencia 'THEN'\n" % (lexer.lineno-1))
+
+def p_if_elseError(p):
+    '''
+    if_else :  IF cond statement ELSE statement
+    '''
+    sys.stderr.write("Error en %d: Falta sentencia 'THEN'\n" % (lexer.lineno-1))
+
 
 def p_while(p):
     '''
     while : WHILE cond DO statement
     '''
     p[0] = WhileStatement(p[2], p[4])
+    p[0].lineno = lexer.lineno
 
 def p_assign(p):
     '''
     assign : location ASSIGN expression  
     '''
     p[0] = Assignment(p[1], p[3])
+    p[0].lineno = lexer.lineno
 
 def p_print(p):
     '''
     print : PRINT LPAREN literals RPAREN 
     '''
     p[0] = Print(p[3])
+    p[0].lineno = lexer.lineno
 
 def p_write(p):
     '''
     write : WRITE LPAREN expression RPAREN 
     '''
     p[0] = Write(p[3])
+    p[0].lineno = lexer.lineno
 
 def p_return(p):
     '''
     return : RETURN expression 
     '''
     p[0] = Return(p[2])
+    p[0].lineno = lexer.lineno
 
 def p_read(p):
     '''
     read : READ LPAREN location RPAREN 
     '''
     p[0] = Read(p[3])
+    p[0].lineno = lexer.lineno
 
 
 def p_expression_funcall_1(p):
@@ -206,6 +270,7 @@ def p_expression_funcall_1(p):
     funcall :  ID LPAREN exprlist RPAREN 
     '''
     p[0] = FunCall(p[1], p[3])
+    p[0].lineno = lexer.lineno
 
 def p_expression_unary(p):
     '''
@@ -213,6 +278,7 @@ def p_expression_unary(p):
                 |  MINUS expression %prec UNARY
     '''
     p[0] = UnaryOp(p[1], p[2])
+    p[0].lineno = lexer.lineno
 
 
 def p_expression_group(p):
@@ -220,12 +286,14 @@ def p_expression_group(p):
     expression : LPAREN expression RPAREN
     '''
     p[0] = Group(p[2])
+    p[0].lineno = lexer.lineno
 
 def p_expression_funcall(p):
     '''
     expression : funcall
     '''
     p[0] = p[1]
+    p[0].lineno = lexer.lineno
 
 def p_expression(p):
     '''
@@ -243,6 +311,7 @@ def p_expression(p):
         p[0] = BinaryOp("*",p[1],p[3])
     else :
         p[0] = BinaryOp("/",p[1],p[3])
+    p[0].lineno = lexer.lineno
 
 def p_comp(p):
     '''
@@ -265,6 +334,7 @@ def p_comp(p):
         p[0] = BinaryOp("==",p[1],p[3])
     else:
         p[0] = BinaryOp("!=",p[1],p[3])
+    p[0].lineno = lexer.lineno
 
     
 def p_cond(p):
@@ -280,15 +350,16 @@ def p_cond(p):
             p[0] = Relation('and', p[1], p[3])
     elif (len(p) == 3):
         p[0] = UnaryOp('not',p[2])
+    p[0].lineno = lexer.lineno
 
 #se omiten los tipos de dato bool por ahora
 
-#def p_cond_1(p):
-#    '''
-#    cond : id
-#          | literal
-#    ''' 
-#    p[0] = p[1]
+# def p_cond_1(p):
+#     '''
+#     cond : location
+#           | BOOL
+#     ''' 
+#     p[0] = p[1]
 
 #se agregan las agrupaciones de los cond
 
@@ -297,6 +368,7 @@ def p_cond_1(p):
     cond : LPAREN cond RPAREN
     ''' 
     p[0] = Group(p[2])
+    p[0].lineno = lexer.lineno
 
 def p_expression_1(p):
     '''
@@ -304,12 +376,14 @@ def p_expression_1(p):
                 | literal
     '''
     p[0] = p[1]
+    p[0].lineno = lexer.lineno
 
 def p_expression_2(p):
     '''
     expression : TYPENAME LPAREN expression RPAREN 
     '''
     p[0] = Cast(p[1],p[3])
+    p[0].lineno = lexer.lineno
 
 def p_exprlist(p):
     '''
@@ -317,6 +391,14 @@ def p_exprlist(p):
     '''
     p[1].append(p[3])
     p[0] = p[1]
+    p[0].lineno = lexer.lineno
+
+def p_exprlistError(p):
+    '''
+    exprlist :  exprlist expression
+    '''
+    p[0] = p[1]
+    sys.stderr.write("Error en %d: Falta en el uso de ',' entre expressiones\n" % (lexer.lineno))
 
 def p_exprlist_1(p):
     '''
@@ -324,6 +406,7 @@ def p_exprlist_1(p):
             | empty
     '''
     p[0] = ExprList([p[1]])
+    p[0].lineno = lexer.lineno
 
 #se quital los literales bool
 
@@ -332,30 +415,37 @@ def p_literal(p):
     literal : INTEGER
     '''
     p[0] = Literal("int",p[1])
+    p[0].lineno = lexer.lineno
 
 def p_literal_1(p):
     '''
     literal : FLOAT
     '''
     p[0] = Literal("float",p[1])
+    p[0].lineno = lexer.lineno
 
 def p_literal_2(p):
     '''
     literals : STRING
     '''
     p[0] = Literal("string",p[1])
+    p[0].lineno = lexer.lineno
 
 def p_location(p):
     '''
     location : ID
     '''
     p[0] = Location(p[1],None)
+    p[0].lineno = lexer.lineno
 
 def p_location_2(p):
     '''
     location : ID LBRACKET expression RBRACKET
     '''
     p[0] = Location(p[1],p[3])
+    p[0].lineno = lexer.lineno
+
+
 
 def p_empty(p):
     '''
@@ -365,7 +455,8 @@ def p_empty(p):
 
 def p_error(p):
     if p:
-        error(p.lineno, "Error de sintaxis en el token '%s'" % p.value)
+        error(p.lineno,"Error: %s" %p)
+        error((p.lineno), "Error de sintaxis en el token '%s'" % p.value)
     else:
         error("EOF","Error de sintaxis, fin de entrada.")
 
